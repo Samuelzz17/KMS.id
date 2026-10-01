@@ -1,0 +1,309 @@
+{
+  "entities": {
+    "CupProduct": {
+      "title": "CupProduct",
+      "description": "Katalog dan stok fisik produk cup plastik",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["Datar", "Oval", "Injection", "Paper", "Aksesoris"] },
+        "size": { "type": "string" },
+        "grammage": { "type": "string" },
+        "material": { "type": "string", "enum": ["PP", "PET", "Paper", "Plastik"] },
+        "stockPcs": { "type": "number" },
+        "minStockAlert": { "type": "number" },
+        "costPricePerPcs": { "type": "number" },
+        "sellPricePolosPerPcs": { "type": "number" },
+        "unitPerSlop": { "type": "number" },
+        "unitPerBox": { "type": "number" },
+        "description": { "type": "string" }
+      },
+      "required": [
+        "id",
+        "code",
+        "name",
+        "type",
+        "size",
+        "grammage",
+        "material",
+        "stockPcs",
+        "minStockAlert",
+        "costPricePerPcs",
+        "sellPricePolosPerPcs",
+        "unitPerSlop",
+        "unitPerBox"
+      ]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "Catatan log mutasi fisik cup plastik masuk dan keluar",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "cupProductId": { "type": "string" },
+        "cupProductName": { "type": "string" },
+        "type": { "type": "string", "enum": ["IN", "OUT_SABLON", "OUT_SALE", "OUT_REJECT"] },
+        "quantityPcs": { "type": "number" },
+        "notes": { "type": "string" },
+        "referenceOrderNo": { "type": "string" },
+        "operatorName": { "type": "string" }
+      },
+      "required": ["id", "date", "cupProductId", "cupProductName", "type", "quantityPcs", "notes"]
+    },
+    "SablonPricingTier": {
+      "title": "SablonPricingTier",
+      "description": "Varian tarif sablon berjenjang berdasarkan kuantiti order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "minQty": { "type": "number" },
+        "maxQty": { "type": "number" },
+        "pricePerPcs1Sisi": { "type": "number" },
+        "pricePerPcs2Sisi": { "type": "number" },
+        "pricePerPcsKeliling": { "type": "number" },
+        "freeFilm": { "type": "boolean" }
+      },
+      "required": ["id", "label", "minQty", "maxQty", "pricePerPcs1Sisi", "pricePerPcs2Sisi", "pricePerPcsKeliling", "freeFilm"]
+    },
+    "CustomerOrder": {
+      "title": "CustomerOrder",
+      "description": "Dokumen Surat Perintah Kerja (SPK) dan faktur pemesanan sablon cup",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "deadlineDate": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerBrand": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "customerAddress": { "type": "string" },
+        "cupProductId": { "type": "string" },
+        "cupProductName": { "type": "string" },
+        "cupSize": { "type": "string" },
+        "cupGrammage": { "type": "string" },
+        "quantityPcs": { "type": "number" },
+        "sablonSides": { "type": "string", "enum": ["1 Sisi", "2 Sisi", "Keliling 360°"] },
+        "inkColorName": { "type": "string" },
+        "inkHex": { "type": "string" },
+        "customInkNotes": { "type": "string" },
+        "hasExistingFilm": { "type": "boolean" },
+        "filmFee": { "type": "number" },
+        "cupPricePerPcs": { "type": "number" },
+        "sablonPricePerPcs": { "type": "number" },
+        "totalPerPcs": { "type": "number" },
+        "subtotal": { "type": "number" },
+        "additionalCost": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "downPayment": { "type": "number" },
+        "remainingPayment": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["BELUM_BAYAR", "DP", "LUNAS"] },
+        "paymentMethod": { "type": "string" },
+        "productionStatus": { "type": "string", "enum": ["ANTREAN", "SETTING_FILM", "PROSES_SABLON", "FINISHING", "SIAP_AMBIL", "SELESAI", "BATAL"] },
+        "rejectPcs": { "type": "number" },
+        "notes": { "type": "string" },
+        "operatorName": { "type": "string" }
+      },
+      "required": [
+        "id",
+        "orderNumber",
+        "createdAt",
+        "deadlineDate",
+        "customerName",
+        "customerBrand",
+        "customerPhone",
+        "cupProductId",
+        "cupProductName",
+        "cupSize",
+        "cupGrammage",
+        "quantityPcs",
+        "sablonSides",
+        "inkColorName",
+        "inkHex",
+        "hasExistingFilm",
+        "filmFee",
+        "cupPricePerPcs",
+        "sablonPricePerPcs",
+        "totalPerPcs",
+        "subtotal",
+        "additionalCost",
+        "totalPrice",
+        "downPayment",
+        "remainingPayment",
+        "paymentStatus",
+        "productionStatus",
+        "rejectPcs"
+      ]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Database pelanggan dan profil pemilik gerai minuman",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "brand": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "firstOrderDate": { "type": "string" },
+        "lastOrderDate": { "type": "string" },
+        "totalOrdersCount": { "type": "number" },
+        "totalQuantityCups": { "type": "number" },
+        "notes": { "type": "string" }
+      },
+      "required": [
+        "id",
+        "name",
+        "brand",
+        "phone",
+        "firstOrderDate",
+        "lastOrderDate",
+        "totalOrdersCount",
+        "totalQuantityCups"
+      ]
+    },
+    "ExpenseItem": {
+      "title": "ExpenseItem",
+      "description": "Catatan pengeluaran operasional dan kas keluar workshop",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "recipient": { "type": "string" },
+        "receiptNo": { "type": "string" },
+        "notes": { "type": "string" },
+        "operatorName": { "type": "string" }
+      },
+      "required": ["id", "date", "category", "title", "amount", "paymentMethod"]
+    },
+    "WorkshopAsset": {
+      "title": "WorkshopAsset",
+      "description": "Investasi aset mesin, peralatan afdruk, dan sarana workshop",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "purchaseDate": { "type": "string" },
+        "purchaseCost": { "type": "number" },
+        "quantity": { "type": "number" },
+        "condition": { "type": "string" },
+        "usefulLifeYears": { "type": "number" },
+        "location": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "category", "purchaseDate", "purchaseCost", "quantity", "condition", "usefulLifeYears"]
+    },
+    "ConsumableItem": {
+      "title": "ConsumableItem",
+      "description": "Katalog dan stok bahan operasional afdruk, cat, tinta, dan kimia sablon",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "stock": { "type": "number" },
+        "minStockAlert": { "type": "number" },
+        "costPerUnit": { "type": "number" },
+        "supplier": { "type": "string" },
+        "location": { "type": "string" },
+        "notes": { "type": "string" },
+        "lastRestockDate": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "category", "unit", "stock", "minStockAlert", "costPerUnit"]
+    },
+    "ConsumableMovement": {
+      "title": "ConsumableMovement",
+      "description": "Log pemakaian dan pembelian bahan operasional sablon",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "consumableId": { "type": "string" },
+        "consumableName": { "type": "string" },
+        "type": { "type": "string", "enum": ["IN", "OUT"] },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "reference": { "type": "string" },
+        "notes": { "type": "string" },
+        "operatorName": { "type": "string" }
+      },
+      "required": ["id", "date", "consumableId", "consumableName", "type", "quantity", "unit", "notes"]
+    },
+    "WorkshopSettings": {
+      "title": "WorkshopSettings",
+      "description": "Pengaturan profil workshop, tarif default, info rekening bank dan TTD admin",
+      "type": "object",
+      "properties": {
+        "workshopName": { "type": "string" },
+        "workshopTagline": { "type": "string" },
+        "workshopAddress": { "type": "string" },
+        "workshopPhone": { "type": "string" },
+        "workshopEmail": { "type": "string" },
+        "paymentInstructions": { "type": "string" },
+        "adminSignName": { "type": "string" },
+        "adminRole": { "type": "string" },
+        "adminSignatureImage": { "type": "string" },
+        "customerSignLabel": { "type": "string" },
+        "defaultFilmFee": { "type": "number" },
+        "defaultDesignFee": { "type": "number" },
+        "defaultPackingFeePerBox": { "type": "number" },
+        "spkNotes": { "type": "string" }
+      },
+      "required": ["workshopName", "workshopAddress", "workshopPhone", "adminSignName", "adminRole"]
+    }
+  },
+  "firestore": {
+    "/cups/{cupId}": {
+      "schema": "CupProduct",
+      "description": "Katalog inventaris stok cup fisik"
+    },
+    "/orders/{orderId}": {
+      "schema": "CustomerOrder",
+      "description": "Surat Perintah Kerja (SPK) dan pesanan sablon pelanggan"
+    },
+    "/movements/{movementId}": {
+      "schema": "StockMovement",
+      "description": "Log mutasi fisik stok masuk dan keluar gudang"
+    },
+    "/pricingTiers/{tierId}": {
+      "schema": "SablonPricingTier",
+      "description": "Daftar struktur harga sablon berjenjang"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Database relasi pemilik kedai dan kafe"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "ExpenseItem",
+      "description": "Catatan pengeluaran operasional workshop"
+    },
+    "/assets/{assetId}": {
+      "schema": "WorkshopAsset",
+      "description": "Daftar aset investasi dan mesin workshop"
+    },
+    "/consumables/{consumableId}": {
+      "schema": "ConsumableItem",
+      "description": "Stok bahan obat afdruk, tinta sablon dan kimia"
+    },
+    "/consumableMovements/{movementId}": {
+      "schema": "ConsumableMovement",
+      "description": "Log pemakaian dan pembelian bahan operasional"
+    },
+    "/settings/{settingsId}": {
+      "schema": "WorkshopSettings",
+      "description": "Konfigurasi tarif, rekening transfer dan tanda tangan admin"
+    }
+  }
+}

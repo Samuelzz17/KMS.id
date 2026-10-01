@@ -1,0 +1,230 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Connection test document
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    // 1. Cups Catalog
+    function isValidCup(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.code is string && data.code.size() <= 64 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.type in ['Datar', 'Oval', 'Injection', 'Paper', 'Aksesoris'] &&
+             data.size is string && data.size.size() <= 64 &&
+             data.grammage is string && data.grammage.size() <= 64 &&
+             data.material in ['PP', 'PET', 'Paper', 'Plastik'] &&
+             data.stockPcs is number && data.stockPcs >= 0 &&
+             data.minStockAlert is number && data.minStockAlert >= 0 &&
+             data.costPricePerPcs is number && data.costPricePerPcs >= 0 &&
+             data.sellPricePolosPerPcs is number && data.sellPricePolosPerPcs >= 0 &&
+             data.unitPerSlop is number && data.unitPerSlop > 0 &&
+             data.unitPerBox is number && data.unitPerBox > 0;
+    }
+
+    match /cups/{cupId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(cupId) && isValidCup(incoming());
+      allow update: if isSignedIn() && isValidId(cupId) && isValidCup(incoming());
+      allow delete: if isSignedIn() && isValidId(cupId);
+    }
+
+    // 2. Orders & SPK
+    function isValidOrder(data) {
+      return data.keys().hasOnly(['id', 'orderNumber', 'createdAt', 'deadlineDate', 'customerName', 'customerBrand', 'customerPhone', 'customerAddress', 'cupProductId', 'cupProductName', 'cupSize', 'cupGrammage', 'quantityPcs', 'sablonSides', 'inkColorName', 'inkHex', 'customInkNotes', 'hasExistingFilm', 'filmFee', 'cupPricePerPcs', 'sablonPricePerPcs', 'totalPerPcs', 'subtotal', 'additionalCost', 'totalPrice', 'downPayment', 'remainingPayment', 'paymentStatus', 'paymentMethod', 'productionStatus', 'rejectPcs', 'notes', 'operatorName']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.orderNumber is string && data.orderNumber.size() <= 64 &&
+             data.customerName is string && data.customerName.size() <= 200 &&
+             data.customerBrand is string && data.customerBrand.size() <= 200 &&
+             data.customerPhone is string && data.customerPhone.size() <= 64 &&
+             data.cupProductId is string && data.cupProductId.size() <= 128 &&
+             data.cupProductName is string && data.cupProductName.size() <= 200 &&
+             data.quantityPcs is number && data.quantityPcs > 0 &&
+             data.sablonSides in ['1 Sisi', '2 Sisi', 'Keliling 360°'] &&
+             data.inkColorName is string && data.inkColorName.size() <= 100 &&
+             (!('customInkNotes' in data) || (data.customInkNotes is string && data.customInkNotes.size() <= 2000)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+             data.totalPrice is number && data.totalPrice >= 0 &&
+             data.downPayment is number && data.downPayment >= 0 &&
+             data.remainingPayment is number && data.remainingPayment >= 0 &&
+             data.paymentStatus in ['BELUM_BAYAR', 'DP', 'LUNAS'] &&
+             data.productionStatus in ['ANTREAN', 'SETTING_FILM', 'PROSES_SABLON', 'FINISHING', 'SIAP_AMBIL', 'SELESAI', 'BATAL'] &&
+             data.rejectPcs is number && data.rejectPcs >= 0;
+    }
+
+    match /orders/{orderId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(orderId) && isValidOrder(incoming());
+      allow update: if isSignedIn() && isValidId(orderId) && isValidOrder(incoming()) && incoming().orderNumber == existing().orderNumber;
+      allow delete: if isSignedIn() && isValidId(orderId);
+    }
+
+    // 3. Stock Movements
+    function isValidMovement(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.cupProductId is string && data.cupProductId.size() <= 128 &&
+             data.cupProductName is string && data.cupProductName.size() <= 200 &&
+             data.type in ['IN', 'OUT_SABLON', 'OUT_SALE', 'OUT_REJECT'] &&
+             data.quantityPcs is number && data.quantityPcs > 0 &&
+             data.notes is string && data.notes.size() <= 1000;
+    }
+
+    match /movements/{movementId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(movementId) && isValidMovement(incoming());
+      allow update: if isSignedIn() && isValidId(movementId) && isValidMovement(incoming());
+      allow delete: if isSignedIn() && isValidId(movementId);
+    }
+
+    // 4. Sablon Pricing Tiers
+    function isValidTier(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.label is string && data.label.size() <= 100 &&
+             data.minQty is number && data.minQty >= 0 &&
+             data.maxQty is number && data.maxQty >= data.minQty &&
+             data.pricePerPcs1Sisi is number && data.pricePerPcs1Sisi >= 0 &&
+             data.pricePerPcs2Sisi is number && data.pricePerPcs2Sisi >= 0 &&
+             data.pricePerPcsKeliling is number && data.pricePerPcsKeliling >= 0 &&
+             data.freeFilm is bool;
+    }
+
+    match /pricingTiers/{tierId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(tierId) && isValidTier(incoming());
+      allow update: if isSignedIn() && isValidId(tierId) && isValidTier(incoming());
+      allow delete: if isSignedIn() && isValidId(tierId);
+    }
+
+    // 5. Customer Database
+    function isValidCustomer(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.brand is string && data.brand.size() <= 200 &&
+             data.phone is string && data.phone.size() <= 64 &&
+             data.totalOrdersCount is number && data.totalOrdersCount >= 0 &&
+             data.totalQuantityCups is number && data.totalQuantityCups >= 0;
+    }
+
+    match /customers/{customerId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(customerId) && isValidCustomer(incoming());
+      allow update: if isSignedIn() && isValidId(customerId) && isValidCustomer(incoming());
+      allow delete: if isSignedIn() && isValidId(customerId);
+    }
+
+    // 6. Expense Items
+    function isValidExpense(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.date is string && data.date.size() <= 64 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.title is string && data.title.size() <= 300 &&
+             data.amount is number && data.amount > 0 &&
+             data.paymentMethod is string && data.paymentMethod.size() <= 100;
+    }
+
+    match /expenses/{expenseId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(expenseId) && isValidExpense(incoming());
+      allow update: if isSignedIn() && isValidId(expenseId) && isValidExpense(incoming());
+      allow delete: if isSignedIn() && isValidId(expenseId);
+    }
+
+    // 7. Workshop Assets
+    function isValidAsset(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.code is string && data.code.size() <= 64 &&
+             data.name is string && data.name.size() <= 300 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.purchaseDate is string && data.purchaseDate.size() <= 64 &&
+             data.purchaseCost is number && data.purchaseCost >= 0 &&
+             data.quantity is number && data.quantity > 0 &&
+             data.condition is string && data.condition.size() <= 100 &&
+             data.usefulLifeYears is number && data.usefulLifeYears >= 0;
+    }
+
+    match /assets/{assetId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(assetId) && isValidAsset(incoming());
+      allow update: if isSignedIn() && isValidId(assetId) && isValidAsset(incoming());
+      allow delete: if isSignedIn() && isValidId(assetId);
+    }
+
+    // 8. Consumables Inventory
+    function isValidConsumable(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.code is string && data.code.size() <= 64 &&
+             data.name is string && data.name.size() <= 300 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.unit is string && data.unit.size() <= 50 &&
+             data.stock is number && data.stock >= 0 &&
+             data.minStockAlert is number && data.minStockAlert >= 0 &&
+             data.costPerUnit is number && data.costPerUnit >= 0;
+    }
+
+    match /consumables/{consumableId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(consumableId) && isValidConsumable(incoming());
+      allow update: if isSignedIn() && isValidId(consumableId) && isValidConsumable(incoming());
+      allow delete: if isSignedIn() && isValidId(consumableId);
+    }
+
+    // 9. Consumable Movements
+    function isValidConsumableMovement(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.date is string && data.date.size() <= 64 &&
+             data.consumableId is string && data.consumableId.size() <= 128 &&
+             data.consumableName is string && data.consumableName.size() <= 300 &&
+             data.type in ['IN', 'OUT'] &&
+             data.quantity is number && data.quantity > 0 &&
+             data.unit is string && data.unit.size() <= 50 &&
+             data.notes is string && data.notes.size() <= 1000;
+    }
+
+    match /consumableMovements/{movementId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(movementId) && isValidConsumableMovement(incoming());
+      allow update: if isSignedIn() && isValidId(movementId) && isValidConsumableMovement(incoming());
+      allow delete: if isSignedIn() && isValidId(movementId);
+    }
+
+    // 10. Workshop Settings
+    function isValidSettings(data) {
+      return data.workshopName is string && data.workshopName.size() <= 200 &&
+             data.workshopAddress is string && data.workshopAddress.size() <= 500 &&
+             data.workshopPhone is string && data.workshopPhone.size() <= 64 &&
+             data.adminSignName is string && data.adminSignName.size() <= 200 &&
+             data.adminRole is string && data.adminRole.size() <= 200;
+    }
+
+    match /settings/{settingsId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(settingsId) && isValidSettings(incoming());
+      allow update: if isSignedIn() && isValidId(settingsId) && isValidSettings(incoming());
+      allow delete: if isSignedIn() && isValidId(settingsId);
+    }
+  }
+}
