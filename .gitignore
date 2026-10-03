@@ -10,3 +10,16 @@ coverage/
 # Configs
 firebase-applet-config.json
 firebase-blueprint.json
+firebase-config-output.json
+.firebase/
+
+# Agent & tool data
+.agents/
+.aider-desk/
+.claude/
+.codeartsdoer/
+.codestudio/
+.hermes/
+skills/
+skills-lock.json
+data/

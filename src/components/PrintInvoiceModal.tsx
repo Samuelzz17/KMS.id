@@ -40,7 +40,11 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({
   if (!isOpen || !order) return null;
 
   const workshopConfig = settings || INITIAL_SETTINGS;
-  const paymentInfo = getPaymentStatusLabel(order.paymentStatus);
+  const isPaidOff =
+    order.paymentStatus === 'LUNAS' ||
+    (order.totalPrice > 0 && order.downPayment >= order.totalPrice);
+  const effectivePaymentStatus = isPaidOff ? 'LUNAS' : order.paymentStatus;
+  const paymentInfo = getPaymentStatusLabel(effectivePaymentStatus);
   const prodInfo = getProductionStatusLabel(order.productionStatus);
 
   const handlePrint = () => {
@@ -324,11 +328,11 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({
                   </div>
                   <div className="flex justify-between py-1 text-zinc-800 font-bold">
                     <span>Uang Muka / DP Masuk:</span>
-                    <span>- {formatRupiah(order.downPayment)}</span>
+                    <span>- {formatRupiah(isPaidOff ? order.totalPrice : order.downPayment)}</span>
                   </div>
                   <div className="flex justify-between py-2 bg-zinc-100 p-2 rounded-lg border border-zinc-300 font-montserrat font-black text-black">
                     <span>SISA PELUNASAN:</span>
-                    <span className="text-black">{formatRupiah(order.remainingPayment)}</span>
+                    <span className="text-black">{formatRupiah(isPaidOff ? 0 : Math.max(0, order.remainingPayment))}</span>
                   </div>
                 </div>
               </div>

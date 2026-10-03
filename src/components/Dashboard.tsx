@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Layers,
   Sparkles,
+  FileText,
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -29,6 +30,7 @@ interface DashboardProps {
   movements?: StockMovement[];
   customActivities?: RecentActivityItem[];
   onOpenNewOrder: () => void;
+  onOpenSpkModal?: (order?: CustomerOrder | null) => void;
   onOpenEstimator: () => void;
   onOpenStockModal: (cup?: CupProduct) => void;
   onSelectOrderToPrint: (order: CustomerOrder) => void;
@@ -42,6 +44,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   movements = [],
   customActivities = [],
   onOpenNewOrder,
+  onOpenSpkModal,
   onOpenEstimator,
   onOpenStockModal,
   onSelectOrderToPrint,
@@ -53,8 +56,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const completedOrders = orders.filter((o) => o.productionStatus === 'SELESAI');
   
   const totalRevenue = orders.reduce((sum, o) => sum + (o.productionStatus !== 'BATAL' ? o.totalPrice : 0), 0);
-  const totalCashIn = orders.reduce((sum, o) => sum + (o.productionStatus !== 'BATAL' ? o.downPayment : 0), 0);
-  const totalReceivables = orders.reduce((sum, o) => sum + (o.productionStatus !== 'BATAL' ? o.remainingPayment : 0), 0);
+  const totalCashIn = orders.reduce((sum, o) => {
+    if (o.productionStatus === 'BATAL') return sum;
+    const isPaidOff = o.paymentStatus === 'LUNAS' || (o.totalPrice > 0 && o.downPayment >= o.totalPrice);
+    return sum + (isPaidOff ? o.totalPrice : o.downPayment);
+  }, 0);
+  const totalReceivables = orders.reduce((sum, o) => {
+    if (o.productionStatus === 'BATAL') return sum;
+    const isPaidOff = o.paymentStatus === 'LUNAS' || (o.totalPrice > 0 && o.downPayment >= o.totalPrice);
+    return sum + (isPaidOff ? 0 : Math.max(0, o.remainingPayment));
+  }, 0);
   const totalCupsPrinted = orders.reduce((sum, o) => sum + (o.productionStatus !== 'BATAL' ? o.quantityPcs : 0), 0);
 
   // Stok yang menipis
@@ -62,6 +73,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Breakdown status produksi
   const statusCounts: Record<ProductionStatus, number> = {
+    MENUNGGU_SPK: orders.filter((o) => o.productionStatus === 'MENUNGGU_SPK').length,
     ANTREAN: orders.filter((o) => o.productionStatus === 'ANTREAN').length,
     SETTING_FILM: orders.filter((o) => o.productionStatus === 'SETTING_FILM').length,
     PROSES_SABLON: orders.filter((o) => o.productionStatus === 'PROSES_SABLON').length,
@@ -94,23 +106,84 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* 1. Tombol Form Sales (Invoice) */}
             <button
               onClick={onOpenNewOrder}
-              className="flex items-center gap-2 px-5 py-3 bg-white hover:bg-zinc-200 text-black rounded-xl text-xs font-montserrat font-black shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center gap-2.5 px-5 py-3 bg-white hover:bg-zinc-200 text-black rounded-xl text-xs font-montserrat font-black shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-[1.02] active:scale-[0.98] border border-white"
+              title="Buka Form Sales untuk catat pesanan & terbitkan invoice DP"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Buat Pesanan & SPK</span>
+              <div className="text-left">
+                <span className="block leading-none">+ Form Sales (Invoice)</span>
+                <span className="text-[9px] text-zinc-600 font-inter font-semibold block mt-0.5">Penjualan & DP</span>
+              </div>
             </button>
+
+            {/* 2. Tombol Form Buat SPK */}
+            <button
+              onClick={() => (onOpenSpkModal ? onOpenSpkModal() : onNavigateTab('orders'))}
+              className="flex items-center gap-2.5 px-4 py-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-montserrat font-bold backdrop-blur-md transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+              title="Buka Form SPK untuk tetapkan operator, screen, dan instruksi teknis cetak"
+            >
+              <FileText className="w-4 h-4 text-amber-400" />
+              <div className="text-left">
+                <div className="flex items-center gap-1.5 leading-none">
+                  <span>📝 Form Buat SPK</span>
+                  {statusCounts.MENUNGGU_SPK > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-amber-400 text-black font-black animate-pulse">
+                      {statusCounts.MENUNGGU_SPK} Menunggu
+                    </span>
+                  )}
+                </div>
+                <span className="text-[9px] text-amber-400/80 font-inter font-semibold block mt-0.5">Workshop Produksi</span>
+              </div>
+            </button>
+
+            {/* Tombol Kalkulator Estimasi WA */}
             <button
               onClick={onOpenEstimator}
               className="flex items-center gap-2 px-4 py-3 bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-white rounded-xl text-xs font-inter font-semibold backdrop-blur-md transition-colors"
             >
               <Calculator className="w-4 h-4 text-zinc-300" />
-              <span>Kalkulator Estimasi WA</span>
+              <span>Kalkulator WA</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Alert Banner: Invoice yang menunggu penerbitan SPK Produksi */}
+      {statusCounts.MENUNGGU_SPK > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 backdrop-blur-md shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400">
+              <FileText className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <p className="text-xs font-montserrat font-bold text-white">
+                {statusCounts.MENUNGGU_SPK} Invoice Penjualan Baru Perlu Diterbitkan SPK Produksi
+              </p>
+              <p className="text-[11px] text-zinc-400 font-inter mt-0.5">
+                Segera lengkapi spesifikasi teknis cetak dan assign operator produksi untuk diteruskan ke alur mesin sablon.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => (onOpenSpkModal ? onOpenSpkModal() : onNavigateTab('orders'))}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-montserrat font-black rounded-xl transition-all shadow-md flex items-center gap-1.5 hover:scale-[1.02]"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>📝 Buat SPK Sekarang</span>
+            </button>
+            <button
+              onClick={() => onNavigateTab('orders')}
+              className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-inter font-semibold rounded-xl transition-colors"
+            >
+              Lihat Antrean
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards Grid - Glassmorphism Black & White with Montserrat Black */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -239,7 +312,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5">
+          <div className={`glass-card border rounded-xl p-3 text-center transition-all ${statusCounts.MENUNGGU_SPK > 0 ? 'border-amber-500/40 bg-amber-500/10' : 'border-white/10'}`}>
+            <span className="text-[10px] font-inter font-bold text-amber-400 uppercase tracking-wider block">0. Menunggu SPK</span>
+            <span className="text-2xl font-montserrat font-black text-amber-300 mt-1 block">{statusCounts.MENUNGGU_SPK}</span>
+            <span className="text-[10px] text-zinc-400 font-inter">Perlu SPK</span>
+          </div>
+
           <div className="glass-card border border-white/10 rounded-xl p-3 text-center">
             <span className="text-[10px] font-inter font-bold text-zinc-400 uppercase tracking-wider block">1. Antrean</span>
             <span className="text-2xl font-montserrat font-black text-white mt-1 block">{statusCounts.ANTREAN}</span>
@@ -326,7 +405,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                    <span className="text-[10px] font-inter font-bold px-2 py-1 rounded-lg border border-white/20 bg-white/10 text-white">
+                    <span className={`text-[10px] font-inter font-bold px-2 py-1 rounded-lg border ${order.productionStatus === 'MENUNGGU_SPK' ? 'border-amber-500/40 bg-amber-500/20 text-amber-300' : 'border-white/20 bg-white/10 text-white'}`}>
                       {prodInfo.label}
                     </span>
                     <button
@@ -336,14 +415,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     >
                       <Printer className="w-4 h-4" />
                     </button>
-                    {order.productionStatus !== 'SELESAI' && (
+                    {order.productionStatus === 'MENUNGGU_SPK' ? (
                       <button
-                        onClick={() => onAdvanceOrderStatus(order.id)}
-                        className="text-[11px] px-2.5 py-1 bg-white hover:bg-zinc-200 text-black font-montserrat font-bold rounded-lg transition-colors shadow-xs"
-                        title="Majukan ke tahap alur berikutnya"
+                        onClick={() => (onOpenSpkModal ? onOpenSpkModal(order) : onAdvanceOrderStatus(order.id))}
+                        className="text-[11px] px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-montserrat font-black rounded-lg transition-colors shadow-xs flex items-center gap-1"
+                        title="Buatkan SPK untuk pesanan ini"
                       >
-                        Lanjut &rarr;
+                        <FileText className="w-3 h-3" />
+                        <span>Buat SPK</span>
                       </button>
+                    ) : (
+                      order.productionStatus !== 'SELESAI' && (
+                        <button
+                          onClick={() => onAdvanceOrderStatus(order.id)}
+                          className="text-[11px] px-2.5 py-1 bg-white hover:bg-zinc-200 text-black font-montserrat font-bold rounded-lg transition-colors shadow-xs"
+                          title="Majukan ke tahap alur berikutnya"
+                        >
+                          Lanjut &rarr;
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
@@ -352,7 +442,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             {activeOrders.length === 0 && (
               <div className="text-center py-8 text-zinc-500 font-inter text-xs">
-                Tidak ada pesanan aktif saat ini. Klik tombol "Buat Pesanan & SPK" untuk mulai.
+                Tidak ada pesanan aktif saat ini. Klik tombol "+ Buat Sales Invoice" untuk mulai.
               </div>
             )}
           </div>

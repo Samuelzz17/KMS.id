@@ -21,6 +21,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  FileText,
 } from 'lucide-react';
 import logoAsset from '../assets/logo.svg';
 
@@ -28,9 +29,11 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onOpenNewOrder: () => void;
+  onOpenSpkModal?: () => void;
   onOpenEstimator: () => void;
   lowStockCount: number;
   activeOrdersCount: number;
+  pendingSpkCount?: number;
   currentUser: User | null;
   onSignInGoogle: () => void;
   onSignOut: () => void;
@@ -42,9 +45,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
   onOpenNewOrder,
+  onOpenSpkModal,
   onOpenEstimator,
   lowStockCount,
   activeOrdersCount,
+  pendingSpkCount = 0,
   currentUser,
   onSignInGoogle,
   onSignOut,
@@ -207,15 +212,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Calculator className="w-4 h-4" />
           </button>
           <button
+            onClick={() => (onOpenSpkModal ? onOpenSpkModal() : handleNavClick('orders'))}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-montserrat font-bold transition-all ${
+              theme === 'light'
+                ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-xs'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+            }`}
+            title="Buka Form SPK Produksi"
+          >
+            <FileText className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">📝 SPK</span>
+            {pendingSpkCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            )}
+          </button>
+
+          <button
             onClick={onOpenNewOrder}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-montserrat font-black transition-all ${
               theme === 'light'
                 ? 'bg-black text-white hover:bg-zinc-800 shadow-sm'
                 : 'bg-white text-black hover:bg-zinc-200 shadow-[0_0_15px_rgba(255,255,255,0.2)]'
             }`}
+            title="Buka Form Sales (Invoice Penjualan)"
           >
             <Plus className="w-3.5 h-3.5 stroke-[3]" />
-            <span className="hidden sm:inline">Pesanan Baru</span>
+            <span className="hidden sm:inline">+ Sales</span>
           </button>
         </div>
       </header>
@@ -318,7 +340,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }`}
                 >
                   <Plus className="w-4 h-4 stroke-[3]" />
-                  <span>Buat Pesanan & SPK</span>
+                  <span>+ Form Sales (Invoice)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (onOpenSpkModal) onOpenSpkModal();
+                    else handleNavClick('orders');
+                    setMobileDrawerOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-montserrat font-bold transition-colors ${
+                    theme === 'light'
+                      ? 'border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                      : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                  }`}
+                >
+                  <FileText className="w-4 h-4 text-amber-400" />
+                  <span>📝 Form Buat SPK Produksi</span>
+                  {pendingSpkCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-black font-black">
+                      {pendingSpkCount} Menunggu
+                    </span>
+                  )}
                 </button>
 
                 <button
@@ -500,22 +543,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Primary Quick CTA Buttons */}
           <div className="space-y-2">
+            {/* Tombol Buat Sales Invoice */}
             <button
               onClick={onOpenNewOrder}
-              className={`w-full flex items-center justify-center gap-2 py-3 ${isCollapsed ? 'px-0 rounded-xl' : 'px-4 rounded-2xl'} text-xs font-montserrat font-black transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              className={`w-full flex items-center justify-center gap-2 py-2.5 ${isCollapsed ? 'px-0 rounded-xl' : 'px-4 rounded-2xl'} text-xs font-montserrat font-black transition-all hover:scale-[1.02] active:scale-[0.98] ${
                 theme === 'light'
                   ? 'bg-black hover:bg-zinc-800 text-white shadow-md'
                   : 'bg-white hover:bg-zinc-200 text-black shadow-[0_0_25px_rgba(255,255,255,0.22)]'
               }`}
-              title="Buat Pesanan & SPK"
+              title="Buka Form Sales (Invoice Penjualan)"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
-              {!isCollapsed && <span>Buat Pesanan & SPK</span>}
+              {!isCollapsed && <span>+ Form Sales</span>}
             </button>
 
+            {/* Tombol Form Buat SPK Produksi */}
+            <button
+              onClick={() => (onOpenSpkModal ? onOpenSpkModal() : handleNavClick('orders'))}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 ${isCollapsed ? 'px-0 rounded-xl' : 'px-3 rounded-2xl'} border text-xs font-montserrat font-bold transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                theme === 'light'
+                  ? 'border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 shadow-xs'
+                  : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+              }`}
+              title="Buka Form Pembuatan SPK Produksi"
+            >
+              <FileText className="w-4 h-4 text-amber-400" />
+              {!isCollapsed && (
+                <div className="flex items-center justify-between w-full">
+                  <span>📝 Buat SPK</span>
+                  {pendingSpkCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-amber-500 text-black font-black animate-pulse">
+                      {pendingSpkCount}
+                    </span>
+                  )}
+                </div>
+              )}
+            </button>
+
+            {/* Tombol Kalkulator Estimasi WA */}
             <button
               onClick={onOpenEstimator}
-              className={`w-full flex items-center justify-center gap-2 py-2.5 ${isCollapsed ? 'px-0 rounded-xl' : 'px-3 rounded-2xl'} border text-xs font-inter font-semibold transition-colors backdrop-blur-md ${
+              className={`w-full flex items-center justify-center gap-2 py-2 ${isCollapsed ? 'px-0 rounded-xl' : 'px-3 rounded-2xl'} border text-xs font-inter font-semibold transition-colors backdrop-blur-md ${
                 theme === 'light'
                   ? 'border-zinc-300 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 hover:text-black'
                   : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white'
@@ -523,7 +591,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               title="Kalkulator Estimasi WA"
             >
               <Calculator className="w-4 h-4 opacity-70" />
-              {!isCollapsed && <span>Kalkulator Estimasi WA</span>}
+              {!isCollapsed && <span>Kalkulator WA</span>}
             </button>
           </div>
 

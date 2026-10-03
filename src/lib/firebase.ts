@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import {
   initializeFirestore,
   getFirestore,
@@ -128,6 +128,26 @@ export async function signInWithGoogle(): Promise<User> {
     return result.user;
   } catch (err) {
     console.error('Google Sign-in failed', err);
+    throw err;
+  }
+}
+
+export async function loginWithEmail(email: string, pass: string): Promise<User> {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, pass);
+    return result.user;
+  } catch (err) {
+    console.error('Email Sign-in failed', err);
+    throw err;
+  }
+}
+
+export async function registerWithEmail(email: string, pass: string): Promise<User> {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, pass);
+    return result.user;
+  } catch (err) {
+    console.error('Email Registration failed', err);
     throw err;
   }
 }

@@ -20,6 +20,7 @@ interface NewOrderModalProps {
     filmFee: number;
     totalPrice: number;
   } | null;
+  prefilledCustomer?: Customer | null;
 }
 
 const INK_PRESETS = [
@@ -56,6 +57,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
   customers,
   editingOrder,
   initialEstimate,
+  prefilledCustomer,
 }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerBrand, setCustomerBrand] = useState('');
@@ -119,6 +121,27 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         filmFee: initialEstimate.filmFee,
         operatorName: 'Agus Subekti'
       }]);
+    } else if (prefilledCustomer) {
+      setCustomerName(prefilledCustomer.name);
+      setCustomerBrand(prefilledCustomer.brand);
+      setCustomerPhone(prefilledCustomer.phone);
+      setCustomerAddress(prefilledCustomer.address || '');
+      setDeadlineDate('');
+      setDownPayment(0);
+      setAdditionalCost(0);
+      setNotes(prefilledCustomer.notes ? `Repeat Order: ${prefilledCustomer.notes}` : 'Repeat order mitra.');
+      setItems([{
+        id: Date.now().toString(),
+        cupProductId: cups[0]?.id || '',
+        quantity: 1000,
+        sides: '1 Sisi',
+        inkColorName: 'Hitam Solid',
+        inkHex: '#18181B',
+        customInkNotes: '',
+        hasExistingFilm: true,
+        filmFee: 0,
+        operatorName: 'Agus Subekti'
+      }]);
     } else {
        // Reset
       setCustomerName('');
@@ -142,7 +165,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         operatorName: 'Agus Subekti'
       }]);
     }
-  }, [editingOrder, initialEstimate, isOpen]);
+  }, [editingOrder, initialEstimate, prefilledCustomer, isOpen]);
 
   if (!isOpen) return null;
 
@@ -212,10 +235,18 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
 
   const totalItemSubtotals = calculatedItems.reduce((acc, curr) => acc + curr.itemSubtotal, 0);
   const grandTotal = totalItemSubtotals + additionalCost;
-  const remainingPayment = grandTotal - downPayment;
+  const numDP = Math.round(Number(downPayment) || 0);
+  const numGrandTotal = Math.round(Number(grandTotal) || 0);
+  const remainingPayment = Math.max(0, numGrandTotal - numDP);
+
   let paymentStatus: 'LUNAS' | 'DP' | 'BELUM_BAYAR' = 'BELUM_BAYAR';
-  if (downPayment >= grandTotal) paymentStatus = 'LUNAS';
-  else if (downPayment > 0) paymentStatus = 'DP';
+  if (numGrandTotal > 0 && numDP >= numGrandTotal) {
+    paymentStatus = 'LUNAS';
+  } else if (numDP > 0) {
+    paymentStatus = 'DP';
+  } else {
+    paymentStatus = 'BELUM_BAYAR';
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,8 +278,8 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         totalPerPcs: item.totalPerPcs,
         subtotal: item.itemSubtotal,
         additionalCost,
-        totalPrice: grandTotal,
-        downPayment,
+        totalPrice: numGrandTotal,
+        downPayment: Math.min(numDP, numGrandTotal),
         remainingPayment,
         paymentStatus,
         paymentMethod,
@@ -272,8 +303,8 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         customerAddress,
         subtotal: totalItemSubtotals,
         additionalCost,
-        totalPrice: grandTotal,
-        downPayment,
+        totalPrice: numGrandTotal,
+        downPayment: Math.min(numDP, numGrandTotal),
         remainingPayment,
         paymentStatus,
         paymentMethod,
@@ -281,9 +312,39 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       };
 
       const baseSpkNum = invNum.replace('INV', 'SPK');
+      let remainingDptoAllocate = numDP;
       
       const spks: CustomerOrder[] = calculatedItems.map((item, index) => {
         const suffix = String.fromCharCode(65 + index); // A, B, C...
+        const isSingleItem = calculatedItems.length === 1;
+        const itemTotalPrice = isSingleItem ? numGrandTotal : item.itemSubtotal;
+
+        let itemDP = 0;
+        let itemRemaining = itemTotalPrice;
+        let itemPaymentStatus: 'LUNAS' | 'DP' | 'BELUM_BAYAR' = 'BELUM_BAYAR';
+
+        if (paymentStatus === 'LUNAS') {
+          itemDP = itemTotalPrice;
+          itemRemaining = 0;
+          itemPaymentStatus = 'LUNAS';
+        } else if (paymentStatus === 'DP') {
+          if (isSingleItem) {
+            itemDP = numDP;
+            itemRemaining = Math.max(0, itemTotalPrice - numDP);
+            itemPaymentStatus = itemRemaining === 0 ? 'LUNAS' : 'DP';
+          } else {
+            const allocated = Math.min(remainingDptoAllocate, item.itemSubtotal);
+            remainingDptoAllocate -= allocated;
+            itemDP = allocated;
+            itemRemaining = Math.max(0, item.itemSubtotal - allocated);
+            itemPaymentStatus = itemRemaining === 0 ? 'LUNAS' : (allocated > 0 ? 'DP' : 'BELUM_BAYAR');
+          }
+        } else {
+          itemDP = 0;
+          itemRemaining = itemTotalPrice;
+          itemPaymentStatus = 'BELUM_BAYAR';
+        }
+
         return {
           id: `ord-${Date.now()}-${index}`,
           orderNumber: `${baseSpkNum}-${suffix}`,
@@ -309,14 +370,15 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
           sablonPricePerPcs: item.unitSablonFee,
           totalPerPcs: item.totalPerPcs,
           subtotal: item.itemSubtotal,
-          additionalCost: 0, // Managed at invoice level
-          totalPrice: item.itemSubtotal, // Without additional cost per item
-          downPayment: 0, // Managed at invoice level
-          remainingPayment: item.itemSubtotal,
-          paymentStatus: 'BELUM_BAYAR', // Managed at invoice level
-          productionStatus: item.sides === 'Polos (Tanpa Sablon)' ? 'SIAP_AMBIL' : 'ANTREAN',
+          additionalCost: isSingleItem ? additionalCost : 0,
+          totalPrice: itemTotalPrice,
+          downPayment: itemDP,
+          remainingPayment: itemRemaining,
+          paymentStatus: itemPaymentStatus,
+          paymentMethod,
+          productionStatus: item.sides === 'Polos (Tanpa Sablon)' ? 'SIAP_AMBIL' : 'MENUNGGU_SPK',
           rejectPcs: 0,
-          notes: '',
+          notes: notes.trim(),
           operatorName: item.operatorName,
         };
       });
@@ -341,15 +403,23 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
       
-      <div className="relative w-full max-w-6xl max-h-[90vh] bg-zinc-950 border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="relative w-full max-w-6xl max-h-[90vh] bg-[#0a0a0a] border border-white/[0.08] shadow-[0_0_80px_rgba(0,0,0,0.8)] rounded-[2rem] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10 bg-zinc-900/50">
+        <div className="flex items-center justify-between p-6 border-b border-white/[0.08] bg-[#111] backdrop-blur-xl z-10">
           <div>
-            <h2 className="text-xl font-montserrat font-black text-white">
-              {editingOrder ? `Edit SPK: ${editingOrder.orderNumber}` : 'Buat Pesanan & SPK Baru'}
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 uppercase tracking-widest">
+                BAGIAN PENJUALAN / SALES
+              </span>
+              <span className="text-xs text-zinc-400 font-inter">• Faktur & Tagihan</span>
+            </div>
+            <h2 className="text-2xl font-montserrat font-black text-white tracking-tight">
+              {editingOrder ? `Edit Sales Invoice: ${editingOrder.orderNumber}` : 'Form Sales (Invoice Penjualan)'}
             </h2>
-            <p className="text-sm text-zinc-400 mt-1">
-              {editingOrder ? 'Ubah spesifikasi teknis sablon' : 'Terbitkan invoice dan surat perintah kerja (SPK)'}
+            <p className="text-xs text-zinc-400 font-inter mt-0.5">
+              {editingOrder
+                ? 'Ubah data pesanan pelanggan dan rincian transaksi'
+                : 'Pencatatan order baru, spesifikasi cetak cup, dan penerbitan faktur tagihan / uang muka (DP).'}
             </p>
           </div>
           <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors">
@@ -358,11 +428,11 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
           <form id="orderForm" onSubmit={handleSubmit} className="space-y-8">
             {/* 1. Customer Info */}
-            <div className="glass-panel p-6 rounded-2xl border border-white/10 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10">
+            <div className="bg-[#111] p-6 sm:p-8 rounded-3xl border border-white/[0.08] shadow-lg relative overflow-hidden group hover:border-white/[0.15] transition-colors duration-500">
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity duration-500 transform group-hover:scale-110">
                 <User className="w-24 h-24" />
               </div>
               <h3 className="text-sm font-montserrat font-bold text-white mb-4 flex items-center gap-2 relative z-10">
@@ -416,9 +486,9 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                 )}
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {calculatedItems.map((item, index) => (
-                  <div key={item.id} className="glass-panel p-6 rounded-2xl border border-white/10 relative">
+                  <div key={item.id} className="bg-[#111] p-6 sm:p-8 rounded-3xl border border-white/[0.08] shadow-lg relative overflow-hidden group hover:border-white/[0.15] transition-colors duration-500">
                     {!editingOrder && items.length > 1 && (
                       <button type="button" onClick={() => handleRemoveItem(item.id)} className="absolute top-4 right-4 p-1.5 text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors">
                         <Trash2 className="w-4 h-4" />
@@ -493,16 +563,13 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                                 Biaya klise: <strong className="text-white">{formatRupiah(item.currentFilmFee)}</strong>
                               </div>
                             </div>
-                            <div>
-                              <label className="text-xs font-medium text-zinc-300 block mb-1">Instruksi Khusus Desain / Posisi Cetak</label>
-                              <input type="text" placeholder="Contoh: Sisi depan logo utama 2.5cm dari bibir atas cup..." value={item.customInkNotes} onChange={e => handleUpdateItem(item.id, 'customInkNotes', e.target.value)} className="w-full text-xs px-3 py-2 border border-white/10 rounded-xl bg-white/[0.04] text-white" />
-                            </div>
                           </>
                         )}
 
-                        <div className={item.sides === 'Polos (Tanpa Sablon)' ? 'col-span-full mt-4' : 'mt-4'}>
-                           <label className="text-xs font-medium text-zinc-300 block mb-1">Operator / Penanggung Jawab SPK</label>
-                           <input type="text" value={item.operatorName} onChange={e => handleUpdateItem(item.id, 'operatorName', e.target.value)} placeholder="Nama operator workshop" className="w-full text-xs px-3 py-2 border border-white/10 rounded-xl bg-white/[0.04] text-white" />
+                        <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                          <p className="text-[11px] text-blue-400 font-medium leading-relaxed">
+                            💡 <strong>Catatan:</strong> Detail teknis SPK (seperti penugasan Operator Produksi dan instruksi khusus desain) dapat diisi nanti oleh tim Produksi di menu <strong>Manajemen SPK</strong>.
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -518,8 +585,8 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
             </div>
 
             {/* 3. Invoice Financials */}
-            <div className="glass-panel p-6 rounded-2xl border border-white/10 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10">
+            <div className="bg-[#111] p-6 sm:p-8 rounded-3xl border border-white/[0.08] shadow-lg relative overflow-hidden group hover:border-white/[0.15] transition-colors duration-500">
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity duration-500 transform group-hover:scale-110">
                 <DollarSign className="w-24 h-24" />
               </div>
               <h3 className="text-sm font-montserrat font-bold text-white mb-4 flex items-center gap-2 relative z-10">
@@ -532,6 +599,30 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                   <div>
                     <label className="text-xs font-medium text-zinc-300 block mb-1">DP / Uang Muka (Rp)</label>
                     <input type="number" required min="0" value={downPayment} onChange={e => setDownPayment(Number(e.target.value))} className="w-full text-sm font-bold font-mono px-3 py-2.5 border border-amber-500/30 rounded-xl bg-amber-500/10 text-amber-300 focus:outline-none" />
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setDownPayment(grandTotal)}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold font-montserrat bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all flex items-center gap-1"
+                      >
+                        <span>⚡ Lunas 100%</span>
+                        <span>({formatRupiah(grandTotal)})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDownPayment(Math.round(grandTotal * 0.5))}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold font-montserrat bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all"
+                      >
+                        50% DP
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDownPayment(0)}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold font-montserrat bg-white/5 text-zinc-400 border border-white/10 hover:bg-white/10 transition-all"
+                      >
+                        Rp 0 (Belum DP)
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-zinc-300 block mb-1">Biaya Tambahan / Ongkir (Rp)</label>
@@ -553,29 +644,44 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                   </div>
                 </div>
 
-                <div className="bg-black/40 rounded-xl p-5 border border-white/10">
-                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4">Total Tagihan</h4>
-                  <div className="space-y-3 font-mono text-sm">
-                    <div className="flex justify-between text-zinc-300">
-                      <span>Subtotal Cup ({items.length} item)</span>
-                      <span>{formatRupiah(totalItemSubtotals)}</span>
+                <div className="bg-black/40 rounded-xl p-5 border border-white/10 flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4">Total Tagihan</h4>
+                    <div className="space-y-3 font-mono text-sm">
+                      <div className="flex justify-between text-zinc-300">
+                        <span>Subtotal Cup ({items.length} item)</span>
+                        <span>{formatRupiah(totalItemSubtotals)}</span>
+                      </div>
+                      <div className="flex justify-between text-zinc-300 pb-3 border-b border-white/10">
+                        <span>Biaya Tambahan</span>
+                        <span>{formatRupiah(additionalCost)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="font-bold text-white text-base">Grand Total</span>
+                        <span className="font-black text-white text-lg font-montserrat">{formatRupiah(grandTotal)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-emerald-400">
+                        <span>DP Dibayar</span>
+                        <span>- {formatRupiah(downPayment)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-3 border-t border-white/10">
+                        <span className="font-bold text-rose-400">Sisa Tagihan</span>
+                        <span className="font-black text-rose-400 text-lg font-montserrat">{formatRupiah(Math.max(0, remainingPayment))}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-zinc-300 pb-3 border-b border-white/10">
-                      <span>Biaya Tambahan</span>
-                      <span>{formatRupiah(additionalCost)}</span>
-                    </div>
-                    <div className="flex justify-between items-center pt-1">
-                      <span className="font-bold text-white text-base">Grand Total</span>
-                      <span className="font-black text-white text-lg font-montserrat">{formatRupiah(grandTotal)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-emerald-400">
-                      <span>DP Dibayar</span>
-                      <span>- {formatRupiah(downPayment)}</span>
-                    </div>
-                    <div className="flex justify-between items-center pt-3 border-t border-white/10">
-                      <span className="font-bold text-rose-400">Sisa Tagihan</span>
-                      <span className="font-black text-rose-400 text-lg font-montserrat">{formatRupiah(Math.max(0, remainingPayment))}</span>
-                    </div>
+                  </div>
+
+                  <div className="pt-4 mt-4 border-t border-white/10 flex items-center justify-between">
+                    <span className="text-xs text-zinc-400 font-inter">Status Pembayaran:</span>
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold font-inter border ${
+                      paymentStatus === 'LUNAS'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                        : paymentStatus === 'DP'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    }`}>
+                      {paymentStatus === 'LUNAS' ? '✓ LUNAS (100% Terbayar)' : paymentStatus === 'DP' ? '⏳ DP DITERIMA' : '✕ BELUM BAYAR'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -584,13 +690,18 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-5 border-t border-white/10 bg-zinc-900/50 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl font-bold text-sm text-white bg-white/5 hover:bg-white/10 transition-colors">
-            Batal
-          </button>
-          <button type="submit" form="orderForm" className="px-6 py-2.5 rounded-xl font-bold text-sm text-black bg-white hover:bg-zinc-200 transition-colors flex items-center gap-2">
-            Simpan & Terbitkan
-          </button>
+        <div className="p-6 border-t border-white/[0.08] bg-[#111] flex flex-col sm:flex-row items-center justify-between gap-3 z-10">
+          <div className="text-xs text-zinc-400 font-inter">
+            💡 Setelah diterbitkan, SPK akan berstatus <strong className="text-amber-300">Menunggu SPK</strong> untuk dilengkapi instruksi teknisnya oleh tim produksi.
+          </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl font-bold text-xs text-zinc-300 bg-white/5 hover:bg-white/10 hover:text-white transition-all">
+              Batal
+            </button>
+            <button type="submit" form="orderForm" className="px-6 py-2.5 rounded-xl font-montserrat font-bold text-xs text-black bg-white hover:bg-zinc-200 transition-colors flex items-center gap-2 shadow-md">
+              <span>💾 Terbitkan Sales Invoice</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

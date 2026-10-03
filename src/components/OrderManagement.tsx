@@ -22,11 +22,13 @@ import {
   ArrowRight,
   ArrowLeft,
   Calendar,
+  FileText,
 } from 'lucide-react';
 
 interface OrderManagementProps {
   orders: CustomerOrder[];
   onOpenNewOrder: () => void;
+  onOpenSpkModal?: (order?: CustomerOrder | null) => void;
   onEditOrder: (order: CustomerOrder) => void;
   onDeleteOrder: (orderId: string) => void;
   onPrintOrder: (order: CustomerOrder) => void;
@@ -34,6 +36,7 @@ interface OrderManagementProps {
 }
 
 const PRODUCTION_STAGES: { status: ProductionStatus; title: string }[] = [
+  { status: 'MENUNGGU_SPK', title: '0. Menunggu SPK' },
   { status: 'ANTREAN', title: '1. Antrean SPK' },
   { status: 'SETTING_FILM', title: '2. Setting & Film' },
   { status: 'PROSES_SABLON', title: '3. Sedang Sablon' },
@@ -45,6 +48,7 @@ const PRODUCTION_STAGES: { status: ProductionStatus; title: string }[] = [
 export const OrderManagement: React.FC<OrderManagementProps> = ({
   orders,
   onOpenNewOrder,
+  onOpenSpkModal,
   onEditOrder,
   onDeleteOrder,
   onPrintOrder,
@@ -64,7 +68,9 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
       o.cupProductName.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesProd = filterProduction === 'ALL' || o.productionStatus === filterProduction;
-    const matchesPay = filterPayment === 'ALL' || o.paymentStatus === filterPayment;
+    const isPaidOff = o.paymentStatus === 'LUNAS' || (o.totalPrice > 0 && o.downPayment >= o.totalPrice);
+    const effectivePay = isPaidOff ? 'LUNAS' : o.paymentStatus;
+    const matchesPay = filterPayment === 'ALL' || effectivePay === filterPayment;
 
     return matchesSearch && matchesProd && matchesPay;
   });
@@ -147,12 +153,24 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
             </button>
           </div>
 
+          {/* Tombol Form Sales */}
           <button
             onClick={onOpenNewOrder}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-zinc-200 text-black rounded-xl text-xs font-montserrat font-black shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all hover:scale-[1.01] active:scale-[0.99]"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-white hover:bg-zinc-200 text-black rounded-xl text-xs font-montserrat font-black shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all hover:scale-[1.01] active:scale-[0.99]"
+            title="Buka Form Sales untuk terbitkan invoice penjualan baru"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Buat Pesanan & SPK</span>
+            <span>+ Form Sales (Invoice)</span>
+          </button>
+
+          {/* Tombol Form Buat SPK */}
+          <button
+            onClick={() => (onOpenSpkModal ? onOpenSpkModal() : onOpenNewOrder())}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl text-xs font-montserrat font-black shadow-[0_0_20px_rgba(245,158,11,0.25)] transition-all hover:scale-[1.01] active:scale-[0.99]"
+            title="Buka Form SPK Produksi untuk workshop cetak"
+          >
+            <FileText className="w-4 h-4" />
+            <span>📝 Form Buat SPK</span>
           </button>
         </div>
       </div>
@@ -222,7 +240,9 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
                 {/* Cards Container */}
                 <div className="space-y-3 flex-1 overflow-y-auto max-h-[70vh] pr-1">
                   {colOrders.map((order) => {
-                    const payInfo = getPaymentStatusLabel(order.paymentStatus);
+                    const isPaidOff = order.paymentStatus === 'LUNAS' || (order.totalPrice > 0 && order.downPayment >= order.totalPrice);
+                    const effectivePayStatus = isPaidOff ? 'LUNAS' : order.paymentStatus;
+                    const payInfo = getPaymentStatusLabel(effectivePayStatus);
                     const nextSt = getNextStatus(order.productionStatus);
                     const prevSt = getPrevStatus(order.productionStatus);
 
@@ -237,8 +257,10 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
                             {order.orderNumber}
                           </span>
                           <span className={`text-[10px] font-inter font-bold px-1.5 py-0.5 rounded border ${
-                            order.paymentStatus === 'LUNAS'
-                              ? 'bg-white text-black border-white'
+                            isPaidOff
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs'
+                              : order.paymentStatus === 'DP' || order.downPayment > 0
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                               : 'bg-white/10 text-white border-white/20'
                           }`}>
                             {payInfo.label}
@@ -300,12 +322,48 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
                             >
                               <Share2 className="w-3.5 h-3.5" />
                             </button>
+                            {/* Tombol Edit Data Sales / Invoice (Kuantiti, Cup, DP, Pelanggan, Harga) */}
                             <button
                               onClick={() => onEditOrder(order)}
-                              title="Edit Pesanan"
-                              className="p-1.5 rounded-lg border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-colors"
+                              title="Edit Data Sales (Salah input nama, kuantiti, cup, DP, dsb)"
+                              className="p-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 transition-colors"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Tombol Buat / Edit Spek SPK Workshop */}
+                            {order.productionStatus === 'MENUNGGU_SPK' ? (
+                              <button
+                                onClick={() => (onOpenSpkModal ? onOpenSpkModal(order) : onEditOrder(order))}
+                                className="px-2 py-1 rounded-lg border border-amber-500/40 bg-amber-500 hover:bg-amber-400 text-black transition-all flex items-center gap-1 text-[10px] font-montserrat font-black shadow-sm"
+                                title="Buka Form SPK untuk tetapkan operator dan spesifikasi mesin"
+                              >
+                                <FileText className="w-3 h-3" />
+                                <span>Buat SPK</span>
+                              </button>
+                            ) : (
+                              onOpenSpkModal && (
+                                <button
+                                  onClick={() => onOpenSpkModal(order)}
+                                  title="Edit Spek Teknis SPK (Mesin, Operator, Tinta, Screen)"
+                                  className="p-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:text-amber-200 hover:bg-amber-500/20 transition-colors"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                </button>
+                              )
+                            )}
+
+                            {/* Tombol Hapus Pesanan (Salah Input) */}
+                            <button
+                              onClick={() => {
+                                if (confirm(`Hapus pesanan ${order.orderNumber} (${order.customerBrand})?\n\nPerhatian: Stok cup (${formatNumber(order.quantityPcs)} pcs) akan otomatis dikembalikan ke gudang.`)) {
+                                  onDeleteOrder(order.id);
+                                }
+                              }}
+                              title="Hapus Pesanan (Salah Input)"
+                              className="p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
 
@@ -364,8 +422,10 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
               </thead>
               <tbody className="divide-y divide-white/5 text-zinc-200">
                 {filteredOrders.map((order) => {
+                  const isPaidOff = order.paymentStatus === 'LUNAS' || (order.totalPrice > 0 && order.downPayment >= order.totalPrice);
+                  const effectivePayStatus = isPaidOff ? 'LUNAS' : order.paymentStatus;
                   const prodInfo = getProductionStatusLabel(order.productionStatus);
-                  const payInfo = getPaymentStatusLabel(order.paymentStatus);
+                  const payInfo = getPaymentStatusLabel(effectivePayStatus);
                   const nextSt = getNextStatus(order.productionStatus);
 
                   return (
@@ -408,14 +468,16 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
                         <div className="font-montserrat font-bold text-white">{formatRupiah(order.totalPrice)}</div>
                         <div className="mt-1">
                           <span className={`text-[10px] font-inter font-bold px-1.5 py-0.5 rounded border ${
-                            order.paymentStatus === 'LUNAS'
-                              ? 'bg-white text-black border-white'
+                            isPaidOff
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs'
+                              : order.paymentStatus === 'DP' || order.downPayment > 0
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                               : 'bg-white/10 text-white border-white/20'
                           }`}>
                             {payInfo.label}
                           </span>
                         </div>
-                        {order.remainingPayment > 0 && (
+                        {!isPaidOff && order.remainingPayment > 0 && (
                           <div className="text-[10px] text-zinc-300 font-inter mt-1">
                             Sisa: <span className="text-white font-semibold">{formatRupiah(order.remainingPayment)}</span>
                           </div>
@@ -447,13 +509,36 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
                           >
                             <Share2 className="w-3.5 h-3.5" />
                           </button>
+                          {/* Tombol Edit Data Sales / Invoice (Kuantiti, Cup, DP, Pelanggan, Harga) */}
                           <button
                             onClick={() => onEditOrder(order)}
-                            title="Edit Pesanan"
-                            className="p-1.5 rounded-lg border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-colors"
+                            title="Edit Data Sales (Salah input nama, kuantiti, cup, DP, dsb)"
+                            className="p-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 transition-colors"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
+
+                          {/* Tombol Buat / Edit Spek SPK Workshop */}
+                          {order.productionStatus === 'MENUNGGU_SPK' ? (
+                            <button
+                              onClick={() => (onOpenSpkModal ? onOpenSpkModal(order) : onEditOrder(order))}
+                              className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-montserrat font-black text-[10px] flex items-center gap-1 shadow-xs"
+                              title="Buatkan SPK untuk pesanan ini"
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span>Buat SPK</span>
+                            </button>
+                          ) : (
+                            onOpenSpkModal && (
+                              <button
+                                onClick={() => onOpenSpkModal(order)}
+                                title="Edit Spek Teknis SPK (Mesin, Operator, Tinta, Screen)"
+                                className="p-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:text-amber-200 hover:bg-amber-500/20 transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                            )
+                          )}
                           {nextSt && (
                             <button
                               onClick={() => onUpdateOrderStatus(order.id, nextSt)}
@@ -465,12 +550,12 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
                           )}
                           <button
                             onClick={() => {
-                              if (confirm(`Hapus pesanan ${order.orderNumber}?`)) {
+                              if (confirm(`Hapus pesanan ${order.orderNumber} (${order.customerBrand})?\n\nPerhatian: Stok cup (${formatNumber(order.quantityPcs)} pcs) akan otomatis dikembalikan ke gudang.`)) {
                                 onDeleteOrder(order.id);
                               }
                             }}
-                            title="Hapus"
-                            className="p-1.5 rounded-lg border border-white/10 bg-white/[0.04] text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                            title="Hapus Pesanan (Salah Input)"
+                            className="p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

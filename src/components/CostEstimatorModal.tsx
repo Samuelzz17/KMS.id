@@ -40,19 +40,21 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
     pricingTiers.find((t) => quantity >= t.minQty && quantity <= t.maxQty) ||
     pricingTiers[pricingTiers.length - 1];
 
-  let unitSablonFee = activeTier?.pricePerPcs1Sisi || 180;
-  if (sides === '2 Sisi') {
+  let unitSablonFee = 0;
+  if (sides === '1 Sisi') {
+    unitSablonFee = activeTier?.pricePerPcs1Sisi || 180;
+  } else if (sides === '2 Sisi') {
     unitSablonFee = activeTier?.pricePerPcs2Sisi || 230;
   } else if (sides === 'Keliling 360°') {
     unitSablonFee = activeTier?.pricePerPcsKeliling || 300;
   }
 
-  const isFreeFilm = isRepeatOrder || (activeTier ? activeTier.freeFilm : false);
+  const isFreeFilm = sides === 'Polos (Tanpa Sablon)' || isRepeatOrder || (activeTier ? activeTier.freeFilm : false);
   const filmFee = isFreeFilm ? 0 : 40000;
 
   const cupCostPerPcs = selectedCup?.costPricePerPcs || 0;
-  const inkAndLaborCostPerPcs = 45;
-  const totalCost = (cupCostPerPcs + inkAndLaborCostPerPcs) * quantity + (isRepeatOrder ? 0 : 15000);
+  const inkAndLaborCostPerPcs = sides === 'Polos (Tanpa Sablon)' ? 0 : 45;
+  const totalCost = (cupCostPerPcs + inkAndLaborCostPerPcs) * quantity + (sides === 'Polos (Tanpa Sablon)' || isRepeatOrder ? 0 : 15000);
 
   const cupSellPricePerPcs = selectedCup?.sellPricePolosPerPcs || 0;
   const totalCupSellPrice = cupSellPricePerPcs * quantity;
@@ -197,8 +199,8 @@ Untuk konfirmasi pemesanan, silakan balas pesan ini ya Kak!`;
               <label className="text-xs font-montserrat font-bold text-zinc-300 uppercase tracking-wider">
                 3. Sisi Sablon
               </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['1 Sisi', '2 Sisi', 'Keliling 360°'] as SablonSides[]).map((s) => (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {(['Polos (Tanpa Sablon)', '1 Sisi', '2 Sisi', 'Keliling 360°'] as SablonSides[]).map((s) => (
                   <button
                     key={s}
                     type="button"
@@ -343,7 +345,7 @@ Untuk konfirmasi pemesanan, silakan balas pesan ini ya Kak!`;
                 onClick={handleDirectOrder}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-black font-montserrat font-black text-xs shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all hover:scale-[1.01]"
               >
-                <span>Buat Pesanan Dari Estimasi</span>
+                <span>Buat Sales Invoice Dari Estimasi</span>
               </button>
             )}
           </div>

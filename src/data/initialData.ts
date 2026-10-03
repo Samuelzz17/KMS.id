@@ -12,7 +12,26 @@ import {
   SalesInvoice,
 } from '../types';
 
-export const INITIAL_INVOICES: SalesInvoice[] = [];
+export const INITIAL_INVOICES: SalesInvoice[] = [
+  {
+    id: 'inv-2026-001',
+    invoiceNumber: 'INV-2026-001',
+    createdAt: '2026-09-22T10:00:00Z',
+    deadlineDate: '2026-09-28T16:00:00Z',
+    customerName: 'Ananda Putri',
+    customerBrand: 'Kopi Titik Temu',
+    customerPhone: '081223344556',
+    customerAddress: 'Jl. Palagan Tentara Pelajar No. 88, Sleman',
+    subtotal: 1260000,
+    additionalCost: 15000,
+    totalPrice: 1275000,
+    downPayment: 650000,
+    remainingPayment: 625000,
+    paymentStatus: 'DP',
+    paymentMethod: 'Transfer BCA',
+    notes: 'Order perdana varian Oval 16 oz sablon keliling, DP sudah masuk via BCA.',
+  },
+];
 
 export const INITIAL_CUPS: CupProduct[] = [
   {
@@ -189,6 +208,42 @@ export const INITIAL_SABLON_TIERS: SablonPricingTier[] = [
 ];
 
 export const INITIAL_ORDERS: CustomerOrder[] = [
+  {
+    id: 'ord-100',
+    orderNumber: 'SPK-PENDING-001',
+    invoiceId: 'inv-2026-001',
+    createdAt: '2026-09-22T10:00:00Z',
+    deadlineDate: '2026-09-28T16:00:00Z',
+    customerName: 'Ananda Putri',
+    customerBrand: 'Kopi Titik Temu',
+    customerPhone: '081223344556',
+    customerAddress: 'Jl. Palagan Tentara Pelajar No. 88, Sleman',
+    cupProductId: 'cup-1',
+    cupProductName: 'Cup Oval PP 16 oz (8 gr)',
+    cupSize: '16 oz',
+    cupGrammage: '8 gr',
+    quantityPcs: 2000,
+    sablonSides: 'Keliling 360°',
+    inkColorName: 'Hitam Solid',
+    inkHex: '#18181B',
+    customInkNotes: 'Logo melingkar penuh dengan barcode menu coffee',
+    hasExistingFilm: false,
+    filmFee: 0,
+    cupPricePerPcs: 450,
+    sablonPricePerPcs: 180,
+    totalPerPcs: 630,
+    subtotal: 1260000,
+    additionalCost: 15000,
+    totalPrice: 1275000,
+    downPayment: 650000,
+    remainingPayment: 625000,
+    paymentStatus: 'DP',
+    paymentMethod: 'Transfer BCA',
+    productionStatus: 'MENUNGGU_SPK',
+    rejectPcs: 0,
+    notes: 'Invoice INV-2026-001 terbit. Menunggu workshop terbitkan SPK Produksi & tentukan operator.',
+    operatorName: 'Belum Ditugaskan',
+  },
   {
     id: 'ord-101',
     orderNumber: 'SPK-2026-001',

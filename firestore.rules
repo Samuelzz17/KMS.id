@@ -43,7 +43,8 @@ service cloud.firestore {
              data.costPricePerPcs is number && data.costPricePerPcs >= 0 &&
              data.sellPricePolosPerPcs is number && data.sellPricePolosPerPcs >= 0 &&
              data.unitPerSlop is number && data.unitPerSlop > 0 &&
-             data.unitPerBox is number && data.unitPerBox > 0;
+             data.unitPerBox is number && data.unitPerBox > 0 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000));
     }
 
     match /cups/{cupId} {
@@ -53,26 +54,58 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(cupId);
     }
 
-    // 2. Orders & SPK
-    function isValidOrder(data) {
-      return data.keys().hasOnly(['id', 'orderNumber', 'createdAt', 'deadlineDate', 'customerName', 'customerBrand', 'customerPhone', 'customerAddress', 'cupProductId', 'cupProductName', 'cupSize', 'cupGrammage', 'quantityPcs', 'sablonSides', 'inkColorName', 'inkHex', 'customInkNotes', 'hasExistingFilm', 'filmFee', 'cupPricePerPcs', 'sablonPricePerPcs', 'totalPerPcs', 'subtotal', 'additionalCost', 'totalPrice', 'downPayment', 'remainingPayment', 'paymentStatus', 'paymentMethod', 'productionStatus', 'rejectPcs', 'notes', 'operatorName']) &&
+    // 2. Invoices (Sales)
+    function isValidInvoice(data) {
+      return data.keys().hasOnly(['id', 'invoiceNumber', 'createdAt', 'deadlineDate', 'customerName', 'customerBrand', 'customerPhone', 'customerAddress', 'subtotal', 'additionalCost', 'totalPrice', 'downPayment', 'remainingPayment', 'paymentStatus', 'paymentMethod', 'notes']) &&
              data.id is string && data.id.size() <= 128 &&
-             data.orderNumber is string && data.orderNumber.size() <= 64 &&
+             data.invoiceNumber is string && data.invoiceNumber.size() <= 64 &&
+             data.createdAt is string && data.createdAt.size() <= 64 &&
+             data.deadlineDate is string && data.deadlineDate.size() <= 64 &&
              data.customerName is string && data.customerName.size() <= 200 &&
              data.customerBrand is string && data.customerBrand.size() <= 200 &&
              data.customerPhone is string && data.customerPhone.size() <= 64 &&
-             data.cupProductId is string && data.cupProductId.size() <= 128 &&
-             data.cupProductName is string && data.cupProductName.size() <= 200 &&
-             data.quantityPcs is number && data.quantityPcs > 0 &&
-             data.sablonSides in ['1 Sisi', '2 Sisi', 'Keliling 360°'] &&
-             data.inkColorName is string && data.inkColorName.size() <= 100 &&
-             (!('customInkNotes' in data) || (data.customInkNotes is string && data.customInkNotes.size() <= 2000)) &&
-             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+             (!('customerAddress' in data) || (data.customerAddress is string && data.customerAddress.size() <= 500)) &&
+             data.subtotal is number && data.subtotal >= 0 &&
+             data.additionalCost is number && data.additionalCost >= 0 &&
              data.totalPrice is number && data.totalPrice >= 0 &&
              data.downPayment is number && data.downPayment >= 0 &&
              data.remainingPayment is number && data.remainingPayment >= 0 &&
              data.paymentStatus in ['BELUM_BAYAR', 'DP', 'LUNAS'] &&
-             data.productionStatus in ['ANTREAN', 'SETTING_FILM', 'PROSES_SABLON', 'FINISHING', 'SIAP_AMBIL', 'SELESAI', 'BATAL'] &&
+             (!('paymentMethod' in data) || (data.paymentMethod is string && data.paymentMethod.size() <= 100)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 5000));
+    }
+
+    match /invoices/{invoiceId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(invoiceId) && isValidInvoice(incoming());
+      allow update: if isSignedIn() && isValidId(invoiceId) && isValidInvoice(incoming()) && incoming().invoiceNumber == existing().invoiceNumber;
+      allow delete: if isSignedIn() && isValidId(invoiceId);
+    }
+
+    // 3. Orders & SPK
+    function isValidOrder(data) {
+      return data.keys().hasOnly(['id', 'orderNumber', 'invoiceId', 'createdAt', 'deadlineDate', 'customerName', 'customerBrand', 'customerPhone', 'customerAddress', 'cupProductId', 'cupProductName', 'cupSize', 'cupGrammage', 'quantityPcs', 'sablonSides', 'inkColorName', 'inkHex', 'customInkNotes', 'hasExistingFilm', 'filmFee', 'cupPricePerPcs', 'sablonPricePerPcs', 'totalPerPcs', 'subtotal', 'additionalCost', 'totalPrice', 'downPayment', 'remainingPayment', 'paymentStatus', 'paymentMethod', 'productionStatus', 'rejectPcs', 'notes', 'operatorName']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.orderNumber is string && data.orderNumber.size() <= 64 &&
+             (!('invoiceId' in data) || (data.invoiceId is string && data.invoiceId.size() <= 128)) &&
+             data.customerName is string && data.customerName.size() <= 200 &&
+             data.customerBrand is string && data.customerBrand.size() <= 200 &&
+             data.customerPhone is string && data.customerPhone.size() <= 64 &&
+             (!('customerAddress' in data) || (data.customerAddress is string && data.customerAddress.size() <= 500)) &&
+             data.cupProductId is string && data.cupProductId.size() <= 128 &&
+             data.cupProductName is string && data.cupProductName.size() <= 200 &&
+             data.quantityPcs is number && data.quantityPcs > 0 &&
+             data.sablonSides in ['Polos (Tanpa Sablon)', '1 Sisi', '2 Sisi', 'Keliling 360°'] &&
+             data.inkColorName is string && data.inkColorName.size() <= 100 &&
+             (!('customInkNotes' in data) || (data.customInkNotes is string && data.customInkNotes.size() <= 2000)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 10000)) &&
+             (!('operatorName' in data) || (data.operatorName is string && data.operatorName.size() <= 100)) &&
+             (!('paymentMethod' in data) || (data.paymentMethod is string && data.paymentMethod.size() <= 100)) &&
+             data.totalPrice is number && data.totalPrice >= 0 &&
+             data.downPayment is number && data.downPayment >= 0 &&
+             data.remainingPayment is number && data.remainingPayment >= 0 &&
+             data.paymentStatus in ['BELUM_BAYAR', 'DP', 'LUNAS'] &&
+             data.productionStatus in ['MENUNGGU_SPK', 'ANTREAN', 'SETTING_FILM', 'PROSES_SABLON', 'FINISHING', 'SIAP_AMBIL', 'SELESAI', 'BATAL'] &&
              data.rejectPcs is number && data.rejectPcs >= 0;
     }
 
@@ -83,14 +116,18 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(orderId);
     }
 
-    // 3. Stock Movements
+    // 4. Stock Movements
     function isValidMovement(data) {
-      return data.id is string && data.id.size() <= 128 &&
+      return data.keys().hasOnly(['id', 'date', 'cupProductId', 'cupProductName', 'type', 'quantityPcs', 'notes', 'referenceOrderNo', 'operatorName']) &&
+             data.id is string && data.id.size() <= 128 &&
+             (!('date' in data) || (data.date is string && data.date.size() <= 64)) &&
              data.cupProductId is string && data.cupProductId.size() <= 128 &&
              data.cupProductName is string && data.cupProductName.size() <= 200 &&
              data.type in ['IN', 'OUT_SABLON', 'OUT_SALE', 'OUT_REJECT'] &&
              data.quantityPcs is number && data.quantityPcs > 0 &&
-             data.notes is string && data.notes.size() <= 1000;
+             data.notes is string && data.notes.size() <= 1000 &&
+             (!('referenceOrderNo' in data) || (data.referenceOrderNo is string && data.referenceOrderNo.size() <= 64)) &&
+             (!('operatorName' in data) || (data.operatorName is string && data.operatorName.size() <= 100));
     }
 
     match /movements/{movementId} {
@@ -100,7 +137,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(movementId);
     }
 
-    // 4. Sablon Pricing Tiers
+    // 5. Sablon Pricing Tiers
     function isValidTier(data) {
       return data.id is string && data.id.size() <= 128 &&
              data.label is string && data.label.size() <= 100 &&
@@ -119,14 +156,19 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(tierId);
     }
 
-    // 5. Customer Database
+    // 6. Customer Database
     function isValidCustomer(data) {
-      return data.id is string && data.id.size() <= 128 &&
+      return data.keys().hasOnly(['id', 'name', 'brand', 'phone', 'address', 'firstOrderDate', 'lastOrderDate', 'totalOrdersCount', 'totalQuantityCups', 'notes']) &&
+             data.id is string && data.id.size() <= 128 &&
              data.name is string && data.name.size() <= 200 &&
              data.brand is string && data.brand.size() <= 200 &&
              data.phone is string && data.phone.size() <= 64 &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 500)) &&
+             (!('firstOrderDate' in data) || (data.firstOrderDate is string && data.firstOrderDate.size() <= 64)) &&
+             (!('lastOrderDate' in data) || (data.lastOrderDate is string && data.lastOrderDate.size() <= 64)) &&
              data.totalOrdersCount is number && data.totalOrdersCount >= 0 &&
-             data.totalQuantityCups is number && data.totalQuantityCups >= 0;
+             data.totalQuantityCups is number && data.totalQuantityCups >= 0 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000));
     }
 
     match /customers/{customerId} {
@@ -136,14 +178,18 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(customerId);
     }
 
-    // 6. Expense Items
+    // 7. Expense Items
     function isValidExpense(data) {
       return data.id is string && data.id.size() <= 128 &&
              data.date is string && data.date.size() <= 64 &&
              data.category is string && data.category.size() <= 100 &&
              data.title is string && data.title.size() <= 300 &&
              data.amount is number && data.amount > 0 &&
-             data.paymentMethod is string && data.paymentMethod.size() <= 100;
+             data.paymentMethod is string && data.paymentMethod.size() <= 100 &&
+             (!('recipient' in data) || (data.recipient is string && data.recipient.size() <= 200)) &&
+             (!('receiptNo' in data) || (data.receiptNo is string && data.receiptNo.size() <= 100)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+             (!('operatorName' in data) || (data.operatorName is string && data.operatorName.size() <= 100));
     }
 
     match /expenses/{expenseId} {
@@ -153,7 +199,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(expenseId);
     }
 
-    // 7. Workshop Assets
+    // 8. Workshop Assets
     function isValidAsset(data) {
       return data.id is string && data.id.size() <= 128 &&
              data.code is string && data.code.size() <= 64 &&
@@ -163,7 +209,9 @@ service cloud.firestore {
              data.purchaseCost is number && data.purchaseCost >= 0 &&
              data.quantity is number && data.quantity > 0 &&
              data.condition is string && data.condition.size() <= 100 &&
-             data.usefulLifeYears is number && data.usefulLifeYears >= 0;
+             data.usefulLifeYears is number && data.usefulLifeYears >= 0 &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 200)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000));
     }
 
     match /assets/{assetId} {
@@ -173,7 +221,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(assetId);
     }
 
-    // 8. Consumables Inventory
+    // 9. Consumables Inventory
     function isValidConsumable(data) {
       return data.id is string && data.id.size() <= 128 &&
              data.code is string && data.code.size() <= 64 &&
@@ -182,7 +230,11 @@ service cloud.firestore {
              data.unit is string && data.unit.size() <= 50 &&
              data.stock is number && data.stock >= 0 &&
              data.minStockAlert is number && data.minStockAlert >= 0 &&
-             data.costPerUnit is number && data.costPerUnit >= 0;
+             data.costPerUnit is number && data.costPerUnit >= 0 &&
+             (!('supplier' in data) || (data.supplier is string && data.supplier.size() <= 200)) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 200)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+             (!('lastRestockDate' in data) || (data.lastRestockDate is string && data.lastRestockDate.size() <= 64));
     }
 
     match /consumables/{consumableId} {
@@ -192,7 +244,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(consumableId);
     }
 
-    // 9. Consumable Movements
+    // 10. Consumable Movements
     function isValidConsumableMovement(data) {
       return data.id is string && data.id.size() <= 128 &&
              data.date is string && data.date.size() <= 64 &&
@@ -201,7 +253,9 @@ service cloud.firestore {
              data.type in ['IN', 'OUT'] &&
              data.quantity is number && data.quantity > 0 &&
              data.unit is string && data.unit.size() <= 50 &&
-             data.notes is string && data.notes.size() <= 1000;
+             data.notes is string && data.notes.size() <= 1000 &&
+             (!('reference' in data) || (data.reference is string && data.reference.size() <= 100)) &&
+             (!('operatorName' in data) || (data.operatorName is string && data.operatorName.size() <= 100));
     }
 
     match /consumableMovements/{movementId} {
@@ -211,13 +265,13 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(movementId);
     }
 
-    // 10. Workshop Settings
+    // 11. Workshop Settings
     function isValidSettings(data) {
       return data.workshopName is string && data.workshopName.size() <= 200 &&
-             data.workshopAddress is string && data.workshopAddress.size() <= 500 &&
-             data.workshopPhone is string && data.workshopPhone.size() <= 64 &&
-             data.adminSignName is string && data.adminSignName.size() <= 200 &&
-             data.adminRole is string && data.adminRole.size() <= 200;
+             (!('address' in data) || (data.address is string && data.address.size() <= 500)) &&
+             (!('workshopAddress' in data) || (data.workshopAddress is string && data.workshopAddress.size() <= 500)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 64)) &&
+             (!('workshopPhone' in data) || (data.workshopPhone is string && data.workshopPhone.size() <= 64));
     }
 
     match /settings/{settingsId} {

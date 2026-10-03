@@ -43,26 +43,26 @@ export const FinancialReports: React.FC<FinancialReportsProps> = ({
   const isWithinFilter = (dateString: string) => {
     if (timeFilter === 'all') return true;
     if (!dateString) return false;
-    
+
     const date = new Date(dateString);
     const now = new Date();
-    
+
     if (timeFilter === 'day') {
-      return date.getDate() === now.getDate() && 
-             date.getMonth() === now.getMonth() && 
-             date.getFullYear() === now.getFullYear();
+      return date.getDate() === now.getDate() &&
+        date.getMonth() === now.getMonth() &&
+        date.getFullYear() === now.getFullYear();
     }
-    
+
     if (timeFilter === 'week') {
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(now.getDate() - 7);
       return date >= oneWeekAgo && date <= now;
     }
-    
+
     if (timeFilter === 'month') {
       return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
     }
-    
+
     return true;
   };
 
@@ -74,8 +74,14 @@ export const FinancialReports: React.FC<FinancialReportsProps> = ({
 
   // Revenue & Cash Flow
   const totalOmset = validOrders.reduce((sum, o) => sum + o.totalPrice, 0);
-  const totalCashCollected = validOrders.reduce((sum, o) => sum + o.downPayment, 0);
-  const totalReceivables = validOrders.reduce((sum, o) => sum + o.remainingPayment, 0);
+  const totalCashCollected = validOrders.reduce((sum, o) => {
+    const isPaid = o.paymentStatus === 'LUNAS' || (o.totalPrice > 0 && o.downPayment >= o.totalPrice);
+    return sum + (isPaid ? o.totalPrice : Math.min(o.totalPrice, o.downPayment));
+  }, 0);
+  const totalReceivables = validOrders.reduce((sum, o) => {
+    const isPaid = o.paymentStatus === 'LUNAS' || (o.totalPrice > 0 && o.downPayment >= o.totalPrice);
+    return sum + (isPaid ? 0 : Math.max(0, o.remainingPayment));
+  }, 0);
   const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
   const totalAssets = filteredAssets.reduce((sum, a) => sum + (a.purchaseCost * a.quantity), 0);
   const totalExpenseAndAsset = totalExpenses + totalAssets;
@@ -132,9 +138,9 @@ export const FinancialReports: React.FC<FinancialReportsProps> = ({
     if (!dateStr) return { key: 'Unknown', sortKey: 0 };
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return { key: 'Unknown', sortKey: 0 };
-    
+
     if (groupBy === 'day') {
-      return { 
+      return {
         key: d.toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' }),
         sortKey: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
       };
@@ -142,9 +148,9 @@ export const FinancialReports: React.FC<FinancialReportsProps> = ({
     if (groupBy === 'week') {
       const date = new Date(d);
       const day = date.getDay();
-      const diff = date.getDate() - day + (day === 0 ? -6 : 1); 
+      const diff = date.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(date.setDate(diff));
-      monday.setHours(0,0,0,0);
+      monday.setHours(0, 0, 0, 0);
       return {
         key: `Minggu ${monday.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`,
         sortKey: monday.getTime()

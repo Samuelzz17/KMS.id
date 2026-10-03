@@ -46,6 +46,7 @@ export interface SablonPricingTier {
 }
 
 export type ProductionStatus =
+  | 'MENUNGGU_SPK'
   | 'ANTREAN'
   | 'SETTING_FILM'
   | 'PROSES_SABLON'

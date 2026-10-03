@@ -49,6 +49,12 @@ export const getProductionStatusLabel = (status: ProductionStatus): {
   bgLight: string;
 } => {
   switch (status) {
+    case 'MENUNGGU_SPK':
+      return {
+        label: 'Menunggu SPK',
+        badgeClass: 'bg-zinc-100 text-zinc-800 border-zinc-300',
+        bgLight: 'bg-zinc-50',
+      };
     case 'ANTREAN':
       return {
         label: 'Antrean (Pending)',
@@ -185,6 +191,17 @@ export const getWhatsAppOrderMessage = (order: {
   productionStatus: ProductionStatus;
 }): string => {
   const statusInfo = getProductionStatusLabel(order.productionStatus);
+  const isPaidOff =
+    order.paymentStatus === 'LUNAS' ||
+    (order.totalPrice > 0 && order.downPayment >= order.totalPrice);
+  const effectiveDP = isPaidOff ? order.totalPrice : order.downPayment;
+  const effectiveRemaining = isPaidOff ? 0 : Math.max(0, order.remainingPayment);
+  const effectivePayLabel = isPaidOff
+    ? 'LUNAS'
+    : order.paymentStatus === 'DP' || order.downPayment > 0
+    ? 'Sudah DP'
+    : 'Belum Bayar';
+
   return `Halo Kak ${order.customerName} (${order.customerBrand}), 
 
 Terima kasih atas pesanan sablon cup di workshop kami! Berikut update rincian pesanan Anda:
@@ -196,9 +213,9 @@ Terima kasih atas pesanan sablon cup di workshop kami! Berikut update rincian pe
 *Status Produksi:* ${statusInfo.label}
 
 *Total Biaya:* ${formatRupiah(order.totalPrice)}
-*DP Masuk:* ${formatRupiah(order.downPayment)}
-*Sisa Tagihan:* ${formatRupiah(order.remainingPayment)}
-*Status Bayar:* ${order.paymentStatus === 'LUNAS' ? 'LUNAS' : order.paymentStatus === 'DP' ? 'Sudah DP' : 'Belum Bayar'}
+*DP Masuk:* ${formatRupiah(effectiveDP)}
+*Sisa Tagihan:* ${formatRupiah(effectiveRemaining)}
+*Status Bayar:* ${effectivePayLabel}
 
 Bila ada yang ingin dikonfirmasi silakan balas pesan ini ya Kak. Terima kasih banyak!`;
 };

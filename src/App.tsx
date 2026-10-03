@@ -78,7 +78,9 @@ import { AssetManagement } from './components/AssetManagement';
 import { ConsumablesInventory } from './components/ConsumablesInventory';
 import { SettingsManagement } from './components/SettingsManagement';
 import { CostEstimatorModal } from './components/CostEstimatorModal';
+import Login from './components/Login';
 import { NewOrderModal } from './components/NewOrderModal';
+import { SpkModal } from './components/SpkModal';
 import { PrintInvoiceModal } from './components/PrintInvoiceModal';
 import { StockModal } from './components/StockModal';
 
@@ -199,6 +201,11 @@ export default function App() {
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [orderToPrint, setOrderToPrint] = useState<CustomerOrder | null>(null);
+  const [prefilledCustomer, setPrefilledCustomer] = useState<Customer | null>(null);
+
+  // SPK Creation Modal State
+  const [isSpkModalOpen, setIsSpkModalOpen] = useState(false);
+  const [spkModalOrder, setSpkModalOrder] = useState<CustomerOrder | null>(null);
 
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [stockModalMode, setStockModalMode] = useState<'NEW_PRODUCT' | 'MUTATION'>('MUTATION');
@@ -512,15 +519,132 @@ export default function App() {
     localStorage.setItem('cupsablon_settings', JSON.stringify(settings));
   }, [settings]);
 
-  // Order Handlers
+  // Order & SPK Handlers
+  const handleOpenSpkModal = (order?: CustomerOrder | null) => {
+    setSpkModalOrder(order || null);
+    setIsSpkModalOpen(true);
+  };
+
+  const handleSaveSpk = (spkData: CustomerOrder, autoPrint?: boolean) => {
+    const exists = orders.some((o) => o.id === spkData.id);
+    if (exists) {
+      setOrders((prev) => prev.map((o) => (o.id === spkData.id ? spkData : o)));
+      if (currentUser) {
+        saveOrderToFirestore(spkData).catch(console.error);
+      }
+    } else {
+      // Direct Workshop SPK
+      setOrders((prev) => [spkData, ...prev]);
+      if (currentUser) {
+        saveOrderToFirestore(spkData).catch(console.error);
+      }
+      // Deduct stock for direct workshop SPK
+      setCups((prev) =>
+        prev.map((c) => {
+          if (c.id === spkData.cupProductId) {
+            const updated = { ...c, stockPcs: Math.max(0, c.stockPcs - spkData.quantityPcs) };
+            if (currentUser) saveCupToFirestore(updated).catch(console.error);
+            return updated;
+          }
+          return c;
+        })
+      );
+    }
+
+    logActivity({
+      id: `act-spk-${spkData.id}-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      category: 'ORDER',
+      title: `SPK Diterbitkan: ${spkData.orderNumber}`,
+      description: `SPK untuk ${spkData.customerBrand} (${spkData.cupProductName} - ${formatNumber(spkData.quantityPcs)} pcs) ditugaskan ke operator ${spkData.operatorName || 'Produksi'}. Status: ${spkData.productionStatus}`,
+      badgeLabel: 'SPK Workshop',
+      referenceNo: spkData.orderNumber,
+      operatorName: spkData.operatorName || 'Produksi',
+      quantity: spkData.quantityPcs,
+      productionStatus: spkData.productionStatus,
+    });
+
+    showToast(`SPK ${spkData.orderNumber} (${spkData.customerBrand}) berhasil diterbitkan!`);
+    setIsSpkModalOpen(false);
+    setSpkModalOrder(null);
+
+    if (autoPrint) {
+      setOrderToPrint(spkData);
+      setIsPrintModalOpen(true);
+    }
+  };
+
   const handleUpdateOrder = (updatedOrder: CustomerOrder) => {
+    const prevOrder = orders.find((o) => o.id === updatedOrder.id);
+    if (prevOrder) {
+      // Reconcile cup inventory if cup type or quantity was modified
+      if (prevOrder.cupProductId === updatedOrder.cupProductId) {
+        const qtyDiff = updatedOrder.quantityPcs - prevOrder.quantityPcs;
+        if (qtyDiff !== 0) {
+          setCups((prev) =>
+            prev.map((c) => {
+              if (c.id === updatedOrder.cupProductId) {
+                const updatedCup = { ...c, stockPcs: Math.max(0, c.stockPcs - qtyDiff) };
+                if (currentUser) saveCupToFirestore(updatedCup).catch(console.error);
+                return updatedCup;
+              }
+              return c;
+            })
+          );
+        }
+      } else {
+        // Cup product changed: return previous cup stock, deduct new cup stock
+        setCups((prev) =>
+          prev.map((c) => {
+            if (c.id === prevOrder.cupProductId) {
+              const updated = { ...c, stockPcs: c.stockPcs + prevOrder.quantityPcs };
+              if (currentUser) saveCupToFirestore(updated).catch(console.error);
+              return updated;
+            }
+            if (c.id === updatedOrder.cupProductId) {
+              const updated = { ...c, stockPcs: Math.max(0, c.stockPcs - updatedOrder.quantityPcs) };
+              if (currentUser) saveCupToFirestore(updated).catch(console.error);
+              return updated;
+            }
+            return c;
+          })
+        );
+      }
+    }
+
+    if (updatedOrder.totalPrice > 0 && updatedOrder.downPayment >= updatedOrder.totalPrice) {
+      updatedOrder.paymentStatus = 'LUNAS';
+      updatedOrder.remainingPayment = 0;
+    } else {
+      updatedOrder.remainingPayment = Math.max(0, updatedOrder.totalPrice - updatedOrder.downPayment);
+      if (updatedOrder.downPayment > 0) {
+        updatedOrder.paymentStatus = 'DP';
+      } else {
+        updatedOrder.paymentStatus = 'BELUM_BAYAR';
+      }
+    }
+
     setOrders((prev) => prev.map((o) => (o.id === updatedOrder.id ? updatedOrder : o)));
     if (currentUser) {
       saveOrderToFirestore(updatedOrder).catch(console.error);
     }
-    showToast(`SPK ${updatedOrder.orderNumber} berhasil diperbarui.`);
+
+    logActivity({
+      id: `act-edit-${updatedOrder.id}-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      category: 'ORDER',
+      title: `Order Diedit • ${updatedOrder.orderNumber}`,
+      description: `Perubahan data pesanan ${updatedOrder.customerBrand} (${updatedOrder.cupProductName} - ${formatNumber(updatedOrder.quantityPcs)} pcs) berhasil disimpan.`,
+      badgeLabel: 'Diedit',
+      referenceNo: updatedOrder.orderNumber,
+      operatorName: updatedOrder.operatorName || 'Admin',
+      quantity: updatedOrder.quantityPcs,
+    });
+
+    showToast(`Pesanan ${updatedOrder.orderNumber} berhasil diperbarui.`);
     setEditingOrder(null);
     setInitialEstimate(null);
+    setIsNewOrderOpen(false);
   };
 
   const handleSaveSalesInvoice = (newInvoice: SalesInvoice, newSpks: CustomerOrder[]) => {
@@ -626,14 +750,61 @@ export default function App() {
     showToast(`Invoice ${newInvoice.invoiceNumber} berhasil diterbitkan dengan ${newSpks.length} SPK.`);
     setEditingOrder(null);
     setInitialEstimate(null);
+    setIsNewOrderOpen(false);
   };
 
-  const handleDeleteOrder = (orderId: string) => {
+  const handleDeleteOrder = (orderId: string, restoreStock: boolean = true) => {
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return;
+
+    // Restore stock if requested and status is not yet BATAL
+    if (restoreStock && target.productionStatus !== 'BATAL') {
+      setCups((prev) =>
+        prev.map((c) => {
+          if (c.id === target.cupProductId) {
+            const updated = { ...c, stockPcs: c.stockPcs + target.quantityPcs };
+            if (currentUser) saveCupToFirestore(updated).catch(console.error);
+            return updated;
+          }
+          return c;
+        })
+      );
+
+      // Record cancellation movement
+      const mov: StockMovement = {
+        id: `mov-ret-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        date: new Date().toISOString(),
+        cupProductId: target.cupProductId,
+        cupProductName: target.cupProductName,
+        type: 'IN',
+        quantityPcs: target.quantityPcs,
+        notes: `Pengembalian stok (Batal / Hapus Order: ${target.orderNumber})`,
+        referenceOrderNo: target.orderNumber,
+        operatorName: 'Sistem',
+      };
+      setMovements((prev) => [mov, ...prev]);
+      if (currentUser) saveMovementToFirestore(mov).catch(console.error);
+    }
+
     setOrders((prev) => prev.filter((o) => o.id !== orderId));
     if (currentUser) {
       deleteOrderFromFirestore(orderId).catch(console.error);
     }
-    showToast('Pesanan berhasil dihapus.');
+
+    logActivity({
+      id: `act-del-${orderId}-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      category: 'ORDER',
+      title: `Order Dihapus • ${target.orderNumber}`,
+      description: `Pesanan ${target.customerBrand} (${formatNumber(target.quantityPcs)} pcs) telah dihapus dari sistem.${restoreStock ? ' Stok cup dikembalikan ke gudang.' : ''}`,
+      badgeLabel: 'Dihapus',
+      badgeVariant: 'danger',
+      referenceNo: target.orderNumber,
+      operatorName: 'Admin',
+      quantity: target.quantityPcs,
+    });
+
+    showToast(`Pesanan ${target.orderNumber} berhasil dihapus.${restoreStock ? ' Stok cup telah dikembalikan.' : ''}`);
   };
 
   const handleUpdateOrderStatus = (orderId: string, nextStatus: ProductionStatus) => {
@@ -674,6 +845,7 @@ export default function App() {
     if (!target) return;
 
     const orderFlow: ProductionStatus[] = [
+      'MENUNGGU_SPK',
       'ANTREAN',
       'SETTING_FILM',
       'PROSES_SABLON',
@@ -868,6 +1040,7 @@ export default function App() {
     const data = {
       cups,
       orders,
+      invoices,
       movements,
       pricingTiers,
       customers,
@@ -899,6 +1072,7 @@ export default function App() {
         if (parsed.cups && parsed.orders) {
           setCups(parsed.cups);
           setOrders(parsed.orders);
+          if (parsed.invoices) setInvoices(parsed.invoices);
           if (parsed.movements) setMovements(parsed.movements);
           if (parsed.pricingTiers) setPricingTiers(parsed.pricingTiers);
           if (parsed.customers) setCustomers(parsed.customers);
@@ -922,6 +1096,7 @@ export default function App() {
   const handleResetData = () => {
     setCups(INITIAL_CUPS);
     setOrders(INITIAL_ORDERS);
+    setInvoices(INITIAL_INVOICES);
     setMovements(INITIAL_MOVEMENTS);
     setPricingTiers(INITIAL_SABLON_TIERS);
     setCustomers(INITIAL_CUSTOMERS);
@@ -939,6 +1114,19 @@ export default function App() {
   const activeOrdersCount = orders.filter(
     (o) => o.productionStatus !== 'SELESAI' && o.productionStatus !== 'BATAL'
   ).length;
+  const pendingSpkCount = orders.filter((o) => o.productionStatus === 'MENUNGGU_SPK').length;
+
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white font-inter animate-pulse">Memuat...</div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <Login onLoginSuccess={() => showToast('Login berhasil')} />;
+  }
 
   return (
     <div
@@ -971,9 +1159,11 @@ export default function App() {
           setInitialEstimate(null);
           setIsNewOrderOpen(true);
         }}
+        onOpenSpkModal={() => handleOpenSpkModal()}
         onOpenEstimator={() => setIsEstimatorOpen(true)}
         lowStockCount={lowStockCount}
         activeOrdersCount={activeOrdersCount}
+        pendingSpkCount={pendingSpkCount}
         currentUser={currentUser}
         onSignInGoogle={handleSignInGoogle}
         onSignOut={handleSignOut}
@@ -997,6 +1187,7 @@ export default function App() {
               setInitialEstimate(null);
               setIsNewOrderOpen(true);
             }}
+            onOpenSpkModal={(order) => handleOpenSpkModal(order)}
             onOpenEstimator={() => setIsEstimatorOpen(true)}
             onOpenStockModal={(cup) => {
               setSelectedStockCup(cup || null);
@@ -1020,9 +1211,9 @@ export default function App() {
               setInitialEstimate(null);
               setIsNewOrderOpen(true);
             }}
+            onOpenSpkModal={(order) => handleOpenSpkModal(order)}
             onEditOrder={(order) => {
-              setEditingOrder(order);
-              setIsNewOrderOpen(true);
+              handleOpenSpkModal(order);
             }}
             onDeleteOrder={handleDeleteOrder}
             onPrintOrder={(order) => {
@@ -1092,6 +1283,7 @@ export default function App() {
             customers={customers}
             orders={orders}
             onOpenNewOrderForCustomer={(customer) => {
+              setPrefilledCustomer(customer);
               setEditingOrder(null);
               setInitialEstimate(null);
               setIsNewOrderOpen(true);
@@ -1162,13 +1354,14 @@ export default function App() {
         }}
       />
 
-      {/* 2. Modal Pesanan & SPK Baru */}
+      {/* 2. Modal Form Sales (Invoice Penjualan) */}
       <NewOrderModal
         isOpen={isNewOrderOpen}
         onClose={() => {
           setIsNewOrderOpen(false);
           setEditingOrder(null);
           setInitialEstimate(null);
+          setPrefilledCustomer(null);
         }}
         onUpdateOrder={handleUpdateOrder}
         onSaveSalesInvoice={handleSaveSalesInvoice}
@@ -1177,6 +1370,20 @@ export default function App() {
         customers={customers}
         editingOrder={editingOrder}
         initialEstimate={initialEstimate}
+        prefilledCustomer={prefilledCustomer}
+      />
+
+      {/* 3. Modal Form Pembuatan & Penerbitan SPK Produksi */}
+      <SpkModal
+        isOpen={isSpkModalOpen}
+        onClose={() => {
+          setIsSpkModalOpen(false);
+          setSpkModalOrder(null);
+        }}
+        onSaveSpk={handleSaveSpk}
+        orders={orders}
+        cups={cups}
+        preSelectedOrder={spkModalOrder}
       />
 
       {/* 3. Modal Cetak Faktur & SPK Produksi */}
